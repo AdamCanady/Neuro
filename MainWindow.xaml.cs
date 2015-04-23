@@ -6,6 +6,7 @@
 
 namespace Microsoft.Samples.Kinect.SkeletonBasics
 {
+    using System;
     using System.IO;
     using System.Windows;
     using System.Windows.Media;
@@ -161,11 +162,21 @@ namespace Microsoft.Samples.Kinect.SkeletonBasics
             if (null != this.sensor)
             {
                 // Turn on the skeleton stream to receive skeleton frames
-                this.sensor.SkeletonStream.Enable();
+                this.sensor.SkeletonStream.Enable(new TransformSmoothParameters
+                {
+                //    Smoothing = 1.0f,
+                //    Correction = 0.1f,
+                //    Prediction = 0.1f,
+                    JitterRadius = 0.05f,
+                //    MaxDeviationRadius = 0.05f
+                });
+                //this.sensor.SkeletonStream.Enable();
+                this.sensor.SkeletonStream.TrackingMode = SkeletonTrackingMode.Seated;
 
                 // Add an event handler to be called whenever there is new color frame data
                 this.sensor.SkeletonFrameReady += this.SensorSkeletonFrameReady;
-
+                this.sensor.DepthStream.Enable();
+                this.sensor.DepthFrameReady += this.SensorDepthImageFrameReady;
                 // Start the sensor!
                 try
                 {
@@ -246,6 +257,19 @@ namespace Microsoft.Samples.Kinect.SkeletonBasics
             }
         }
 
+        private void SensorDepthImageFrameReady(object sender, DepthImageFrameReadyEventArgs e)
+        {
+            using (DepthImageFrame depthFrame = e.OpenDepthImageFrame())
+            {
+                if (depthFrame != null){
+                    DepthImagePixel[] pixelData = new DepthImagePixel[depthFrame.PixelDataLength];
+                    depthFrame.CopyDepthImagePixelDataTo(pixelData);
+
+                    Console.WriteLine(pixelData[20].Depth);
+                }
+            }
+        }
+
         /// <summary>
         /// Draws a skeleton's bones and joints
         /// </summary>
@@ -314,6 +338,20 @@ namespace Microsoft.Samples.Kinect.SkeletonBasics
             // We are not using depth directly, but we do want the points in our 640x480 output resolution.
             DepthImagePoint depthPoint = this.sensor.CoordinateMapper.MapSkeletonPointToDepthPoint(skelpoint, DepthImageFormat.Resolution640x480Fps30);
             return new Point(depthPoint.X, depthPoint.Y);
+        }
+
+        private bool JointInBound(Skeleton skeleton, Rect bound, JointType jointType)
+        {
+            Joint joint0 = skeleton.Joints[jointType];
+
+            // If X in the right place and Y in the right place
+            if (joint0.Position.X > bound.Left && joint0.Position.X < bound.Right){
+                if(joint0.Position.X > bound.Bottom && joint0.Position.Y < bound.Top){
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
